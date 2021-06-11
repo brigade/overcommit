@@ -22,6 +22,34 @@ module Overcommit::HookLoader
 
     private
 
+    # GNU/Emacs-style error format:
+    AD_HOC_HOOK_DEFAULT_MESSAGE_PATTERN =
+      /^(?<file>(?:\w:)?[^:]+):(?<line>\d+):[^ ]* (?<type>[^ ]+)/.freeze
+
+    def create_line_aware_command_hook_class(hook_base)
+      Class.new(hook_base) do
+        def run
+          result = execute(command, args: applicable_files)
+
+          return :pass if result.success?
+
+          extract_messages(@config['ad_hoc'], result)
+        end
+
+        def extract_messages(ad_hoc_config, result)
+          warning_message_type_pattern = ad_hoc_config['warning_message_type_pattern']
+          Overcommit::Utils::MessagesUtils.extract_messages(
+            result.stdout.split("\n"),
+            ad_hoc_config['message_pattern'] ||
+              AD_HOC_HOOK_DEFAULT_MESSAGE_PATTERN,
+            Overcommit::Utils::MessagesUtils.create_type_categorizer(
+              warning_message_type_pattern
+            )
+          )
+        end
+      end
+    end
+
     attr_reader :log
 
     # Load and return a {Hook} from a CamelCase hook name.

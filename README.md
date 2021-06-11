@@ -240,6 +240,7 @@ Option                                  | Description
 `install_command`                       | Command the user can run to install the `required_executable` (or alternately the specified `required_libraries`). This is intended for documentation purposes, as Overcommit does not install software on your behalf since there are too many edge cases where such behavior would result in incorrectly configured installations (e.g. installing a Python package in the global package space instead of in a virtual environment).
 `skip_file_checkout`                    | Whether to skip this hook for file checkouts (e.g. `git checkout some-ref -- file`). Only applicable to `PostCheckout` hooks.
 `skip_if`                               | Array of arguments to be executed to determine whether or not the hook should run. For example, setting this to a value of `['bash', '-c', '! which my-executable']` would allow you to skip running this hook if `my-executable` was not in the bin path.
+`ad_hoc`                                | *["Ad-hoc" line-aware command hooks](#adding-existing-line-aware-commands) only.*
 
 In addition to the built-in configuration options, each hook can expose its
 own unique configuration options. The `AuthorEmail` hook, for example, allows
@@ -670,6 +671,67 @@ to understand which arguments are passed to the script depending on the type
 of hook, see the [git-hooks documentation][GHD].
 
 [GHD]: https://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks
+
+### Adding Existing Line-Aware Commands
+
+Or in other words "low-code error format support."
+
+If you use tools that analyze files and report their findings line-by-line,
+and that Overcommit does not yet support, you may be able to integrate them
+with Overcommit without writing any Ruby code in a similar way as
+[for existing Git hooks](#adding-existing-git-hooks).
+
+These special line-aware command hooks behave and are configured the same way
+as the Git ones, except only file arguments get passed to them.
+Also they must have the `ad_hoc` option, so that, using the command output:
+- differentiating between warnings and errors becomes possible
+- modified lines can be detected and acted upon as defined by
+  the `problem_on_unmodified_line`, `requires_files`, `include` and `exclude`
+  [hook options](#hook-options)
+
+**Warning**: Only the command's standard output stream is considered for now,
+*not* its standard error stream.
+
+To differentiate between warning and error messages,
+the `warning_message_type_pattern` suboption may be specified:
+the `type` field of the `message_pattern` regexp below must then include
+the `warning_message_type_pattern` option's text.
+
+The `message_pattern` suboption specifies the format of the command's messages.
+It is a optional [(Ruby) regexp][RubyRE], which if present must at least define
+a `file` [named capture group][RubyRENCG].
+The only other allowed ones are `line` and `type`, which when specified
+enable detection of modified lines and warnings respectively.
+
+**Note**: The default value for this option is often adequate:
+it generalizes the quasi-standard [GNU/Emacs-style error format][GNUEerrf],
+adding the most frequently used warning syntax to it.
+
+For example:
+
+```yaml
+PreCommit:
+  CustomScript:
+    enabled: true
+    command: './bin/custom-script'
+    ad_hoc:
+      message_pattern: !ruby/regexp /^(?<file>[^:]+):(?<line>[0-9]+):(?<type>[^ ]+)/
+      warning_message_type_pattern: warning
+```
+
+**Tip**: To get the syntax of the regexps right, a Ruby interpreter like `irb`
+can help:
+
+```ruby
+require('yaml'); puts YAML.dump(/MY-REGEXP/)
+```
+
+Then copy the output line text as the YAML option's value, thereby
+omitting the `---` prefix.
+
+[RubyRE]: https://ruby-doc.org/core-2.4.1/Regexp.html
+[RubyRENCG]: https://ruby-doc.org/core-2.4.1/Regexp.html#class-Regexp-label-Capturing
+[GNUEerrf]: https://www.gnu.org/prep/standards/standards.html#Errors
 
 ## Security
 

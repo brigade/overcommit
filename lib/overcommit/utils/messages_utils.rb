@@ -37,6 +37,14 @@ module Overcommit::Utils
         end
       end
 
+      def create_type_categorizer(warning_pattern)
+        return nil if warning_pattern.nil?
+
+        lambda do |type|
+          type.include?(warning_pattern) ? :warning : :error
+        end
+      end
+
       private
 
       def extract_file(match, message)

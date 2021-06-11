@@ -74,22 +74,36 @@ module Overcommit::HookLoader
       raise Overcommit::Exceptions::InvalidHookSignature
     end
 
-    def create_ad_hoc_hook(hook_name)
-      hook_module = Overcommit::Hook.const_get(@context.hook_class_name)
-      hook_base = hook_module.const_get('Base')
-
+    def create_git_hook_class(hook_base)
       # Implement a simple class that executes the command and returns pass/fail
       # based on the exit status
-      hook_class = Class.new(hook_base) do
+      Class.new(hook_base) do
         def run
           result = @context.execute_hook(command)
-
           if result.success?
             :pass
           else
             [:fail, result.stdout + result.stderr]
           end
         end
+      end
+    end
+
+    def create_ad_hoc_hook(hook_name)
+      hook_module = Overcommit::Hook.const_get(@context.hook_class_name)
+      hook_base = hook_module.const_get('Base')
+
+      hook_config = @config.for_hook(hook_name, @context.hook_class_name)
+      hook_class =
+        if hook_config['ad_hoc']
+          create_line_aware_command_hook_class(hook_base)
+        else
+          create_git_hook_class(hook_base)
+        end
+
+      # Only to avoid warnings in unit tests...:
+      if hook_module.const_defined?(hook_name)
+        return hook_module.const_get(hook_name).new(@config, @context)
       end
 
       hook_module.const_set(hook_name, hook_class).new(@config, @context)
